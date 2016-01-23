@@ -66,7 +66,7 @@ def GetFileDataset(filename):
 """ kNN 分类器 """
 
 
-class KNNModel:
+class KNNModel(object):
     """ kNN分类器 """
 
     def __init__(self, dataset, labels):
@@ -95,7 +95,7 @@ class KNNModel:
         return sortedClassCount[0][0]
 
 
-class KNNModelWithNormalize:
+class KNNModelWithNormalize(object):
     """ 带归一化的kNN分类器 """
 
     def __init__(self, dataset, labels):
