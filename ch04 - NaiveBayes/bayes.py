@@ -218,10 +218,116 @@ def testNaiveBayesToSpamEmail():
             logging.warning('classification error. Predict/Actual: {}/{}\n{}'.format(
                 result,
                 emails_class[docIndex],
-                emails[docIndex]
+                ' '.join(emails[docIndex])
             ))
     logging.info('the error rate is: {:.2%}'.format(1.0*errorCount/len(testIndexs)))
+
+""" 使用朴素贝叶斯分类器从个人广告中获取区域倾向 """
+
+
+def calcMostFreq(vocabulary, fullText, topN):
+    import operator
+    wordFrequence = {}
+    for word in vocabulary:
+        wordFrequence[word] = fullText.count(word)
+    sortedFrequence = sorted(
+        wordFrequence.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+    return sortedFrequence[:topN]
+
+
+def getLocalWords(feed1, feed0):
+    summaries = []
+    summaries_class = []
+    fullText = []
+    minLen = min(
+        len(feed1['entries']),
+        len(feed0['entries'])
+    )
+    for i in range(minLen):
+        # 第一个feed, 例子中为New York
+        wordList = getContentTokens(feed1['entries'][i]['summary'])
+        summaries.append(wordList)
+        fullText.extend(wordList)
+        summaries_class.append(1)
+        # 第二个feed
+        wordList = getContentTokens(feed0['entries'][i]['summary'])
+        summaries.append(wordList)
+        fullText.extend(wordList)
+        summaries_class.append(0)
+    vocabulary = getVocabulary(summaries)
+
+    # `停用词表` -- 语言中作为冗余/结构辅助性内容的词语表
+    # 多语言停用词表例子 www.ranks.nl/resources/stopwords.html
+    # 去除出现次数最多的N个词
+    topN = 30
+    topNWords = calcMostFreq(vocabulary, fullText, topN)
+    for word, _count in topNWords:
+        if word in vocabulary:
+            vocabulary.remove(word)
+
+    # 生成测试集, 训练集
+    random_order = random.permutation(2*minLen)
+    testIndexs, trainIndexs = random_order[:20], random_order[20:]
+
+    # 训练朴素贝叶斯分类器
+    trainMatrix = []
+    trainCategories = []
+    for docIndex in trainIndexs:
+        trainMatrix.append(getBagOfWords2Vec(vocabulary, summaries[docIndex]))
+        trainCategories.append(summaries_class[docIndex])
+    model = NaiveBayesModel(trainMatrix, trainCategories)
+
+    # 进行分类测试
+    errorCount = 0
+    for docIndex in testIndexs:
+        wordVector = getBagOfWords2Vec(vocabulary, summaries[docIndex])
+        result = model.predict(wordVector)
+        if result != summaries_class[docIndex]:
+            errorCount += 1
+            logging.warning('[classification error] Predict/Actual: {}/{}\n{}'.format(
+                result,
+                summaries_class[docIndex],
+                ' '.join(summaries[docIndex])
+            ))
+    logging.info('[error rate] {:.2%}'.format(1.0*errorCount/len(testIndexs)))
+    return vocabulary, model.pWordsVector
+
+
+def getTopWords(ny, sf):
+    vocabulary, pWordsVector = getLocalWords(ny, sf)
+    top = {'NY': [], 'SF': [], }
+
+    THRESHOLD = -6.0
+    for i in range(len(pWordsVector['class0'])):
+        if pWordsVector['class0'][i] > THRESHOLD:
+            top['NY'].append((vocabulary[i], pWordsVector['class0'][i]))
+        if pWordsVector['class1'][i] > THRESHOLD:
+            top['SF'].append((vocabulary[i], pWordsVector['class1'][i]))
+    import pprint
+    sortedWords = {
+        'SF': list(map(
+            lambda x: x[0],
+            sorted(top['SF'], key=lambda pair: pair[1], reverse=True)
+        )),
+        'NY': list(map(
+            lambda x: x[0],
+            sorted(top['NY'], key=lambda pair: pair[1], reverse=True)
+        )),
+    }
+    print('=====>>  SF  <<=====')
+    pprint.pprint(sortedWords['SF'])
+    print('=====>>  NY  <<=====')
+    pprint.pprint(sortedWords['NY'])
+
 
 if __name__ == '__main__':
     testingNaiveBayes()
     testNaiveBayesToSpamEmail()
+
+    import feedparser
+    ny = feedparser.parse('http://newyork.craigslist.org/search/stp?format=rss')
+    sf = feedparser.parse('http://sfbay.craigslist.org/search/stp?format=rss')
+    getTopWords(ny, sf)
