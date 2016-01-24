@@ -126,8 +126,9 @@ class DicisionTree(object):
     """ 决策树 """
 
     def __init__(self, dataset, labels):
-        self.labels = labels
-        self.tree = self.BuildTree(Dataset(dataset), self.labels)
+        if dataset and labels:
+            self.labels = labels
+            self.tree = self.BuildTree(Dataset(dataset), self.labels)
 
     def SaveToFile(self, filename):
         with open(filename, 'w') as outfile:
@@ -210,6 +211,69 @@ class DicisionTree(object):
             classLabel = downNode
         return classLabel
 
+    @property
+    def depth(self):
+        return self.GetTreeDepth(self.tree)
+
+    @classmethod
+    def GetTreeDepth(cls, tree):
+        max_depth = 0
+        featureLabel = tree.keys()[0]
+        subDicisionTree = tree[featureLabel]
+        for featureValue in subDicisionTree:
+            if isinstance(subDicisionTree[featureValue], dict):
+                depth = 1 + cls.GetTreeDepth(subDicisionTree[featureValue])
+            else:
+                depth = 1
+
+            max_depth = max(depth, max_depth)
+        return max_depth
+
+    @property
+    def num_leaves(self):
+        return self.GetNumLeaves(self.tree)
+
+    @classmethod
+    def GetNumLeaves(cls, tree):
+        num = 0
+        featureLabel = tree.keys()[0]
+        subDicisionTree = tree[featureLabel]
+        for featureValue in subDicisionTree:
+            if isinstance(subDicisionTree[featureValue], dict):
+                num += cls.GetNumLeaves(subDicisionTree[featureValue])
+            else:
+                num += 1
+        return num
+
+    @property
+    def feature_label(self):
+        return self.tree.keys()[0]
+
+    def GetSubTree(self, feature_value):
+        tree = self.__class__(None, None)
+        tree.tree = self.tree[self.feature_label][feature_value]
+        return tree
+
+    @classmethod
+    def GetRetrieveTree(cls, index):
+        trees = (
+            {'no surfacing': {
+                0: 'no',
+                1: {'flippers':
+                    {0: 'no', 1: 'yes'}}
+            }},
+            {'no surfacing': {
+                0: 'no',
+                1: {'flippers':
+                    {0: {'head':
+                             {0: 'no', 1: 'yes'}},
+                     1:'no'}
+            }}},
+        )
+        tree = cls(None, None)
+        tree.tree = trees[index]
+        return tree
+
 
 def LoadLensesData(filename):
     with open(filename) as infile:
@@ -221,5 +285,93 @@ def LoadLensesData(filename):
     lenseTree = DicisionTree(lensesDataset, lensesLabels)
     return lenseTree
 
+
+""" 绘制树形图 """
+import matplotlib.pyplot as plt
+
+
+class DicisionTreePlotter(object):
+
+    DECISION_NODE = {
+        'boxstyle': 'sawtooth',
+        'fc': '0.8',
+    }
+    LEAF_NODE = {
+        'boxstyle': 'round4',
+        'fc': '0.8',
+    }
+    ARROW_ARGS = {
+        'arrowstyle': '<-',
+    }
+
+    def __init__(self, tree):
+        fig = plt.figure(1, facecolor='white')
+        fig.clf()
+        self.ax1 = plt.subplot(111, frameon=False, xticks=[], yticks=[])
+        self.width = 1.0*tree.num_leaves
+        self.depth = 1.0*tree.depth
+        self.offset = {
+            'x': -0.5/self.width,
+            'y': 1.0
+        }
+        self.plot_tree(tree, (0.5, 1.0), '')
+        plt.show()
+
+    def plot_mid_text(self, text, centerPoint, parentPoint):
+        xMid = (parentPoint[0] - centerPoint[0]) / 2.0 + centerPoint[0]
+        yMid = (parentPoint[1] - centerPoint[1]) / 2.0 + centerPoint[1]
+        self.ax1.text(xMid, yMid, text)
+
+    def plot_node(self, text, centerPoint, parentPoint, node_type):
+        self.ax1.annotate(
+            text,
+            xy=parentPoint, xycoords='axes fraction',
+            xytext=centerPoint, textcoords='axes fraction',
+            va='center', ha='center',
+            bbox=node_type, arrowprops=DicisionTreePlotter.ARROW_ARGS
+        )
+
+    def plot_tree(self, tree, parentPoint, text):
+        num_leaves = tree.num_leaves
+        featureLabel = tree.feature_label
+        centerPoint = (
+            self.offset['x'] + (1.0 + num_leaves) / 2.0 / self.width,
+            self.offset['y']
+        )
+        self.plot_mid_text(text, centerPoint, parentPoint)
+        self.plot_node(
+            featureLabel,
+            centerPoint, parentPoint,
+            DicisionTreePlotter.DECISION_NODE
+        )
+        subDicisionTree = tree.tree[featureLabel]
+        self.offset['y'] -= 1.0/self.depth
+        for featureValue in subDicisionTree:
+            if isinstance(subDicisionTree[featureValue], dict):
+                self.plot_tree(
+                    tree.GetSubTree(featureValue),
+                    centerPoint,
+                    str(featureValue)
+                )
+            else:
+                self.offset['x'] += 1.0 / self.width
+                self.plot_node(
+                    subDicisionTree[featureValue],
+                    (self.offset['x'], self.offset['y']),
+                    centerPoint,
+                    DicisionTreePlotter.LEAF_NODE
+                )
+                self.plot_mid_text(
+                    str(featureValue),
+                    (self.offset['x'], self.offset['y']),
+                    centerPoint
+                )
+        self.offset['y'] += 1.0 / self.depth
+
+
 if __name__ == '__main__':
     tree = LoadLensesData('lenses.txt')
+    print(tree.depth)
+    t = DicisionTree.GetRetrieveTree(0)
+    print(t.depth, t.num_leaves)
+    plotter = DicisionTreePlotter(t)
