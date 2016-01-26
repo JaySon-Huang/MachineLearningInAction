@@ -229,7 +229,6 @@ class Options(object):
         self.eCache[k] = [1, Ek]
 
     def calc_estimate(self, index):
-        from IPython import embed;embed()
         fx = float(
             numpy.multiply(self.alphas, self.labels).T * self.K[:, index]
             + self.b
@@ -281,7 +280,10 @@ def inner_loop(i, options):
     # 计算 lower_bound/upper_bound, 调整 alpha[j] 至 (0, C) 之间
     if options.labels[i] != options.labels[j]:
         lower_bound = max(0, options.alphas[j] - options.alphas[i])
-        upper_bound = min(options.constant, options.constant + options.alphas[j] - options.alphas[i])
+        upper_bound = min(
+            options.constant,
+            options.constant + options.alphas[j] - options.alphas[i]
+        )
     else:
         lower_bound = max(0, options.alphas[j] + options.alphas[i] - options.constant)
         upper_bound = min(options.constant, options.alphas[j] + options.alphas[i])
@@ -382,6 +384,7 @@ def test_rbf(k1=1.3):
     import pprint
     dataset, labels = load_dataset('testSetRBF.txt')
     b, alphas = smoP(dataset, labels, 200, 0.0001, 10000, ('rbf', k1))  # C=200 important
+
     dataset = numpy.mat(dataset)
     labels = numpy.mat(labels).T
     support_vectors_index = tuple(numpy.nonzero(alphas.A > 0))[0]
@@ -456,19 +459,19 @@ def load_images(dir_name):
 
 def test_digits(kernel_info=('rbf', 10)):
     dataset, labels = load_images('digits/trainingDigits')
+    b, alphas = smoP(dataset, labels, 200, 0.0001, 10000, kernel_info)
+
     dataset = numpy.mat(dataset)
     labels = numpy.mat(labels).T
-
-    b, alphas = smoP(dataset, labels, 200, 0.0001, 10000, kernel_info)
-    support_vectors_index = numpy.nonzero(alphas.A > 0)[0]
+    support_vectors_index = tuple(numpy.nonzero(alphas.A > 0))[0]
     support_vectors = dataset[support_vectors_index]
     support_vectors_label = labels[support_vectors_index]
     m, _n = support_vectors.shape
     import pprint
     logging.info('支持向量 ({})个:'.format(m))
-    logging.info(pprint.pformat(zip(
-        support_vectors.tolist(), support_vectors_label.A1.tolist()
-    )))
+    # logging.info(pprint.pformat(zip(
+    #     support_vectors.tolist(), support_vectors_label.A1.tolist()
+    # )))
 
     m, n = dataset.shape
     errorCount = 0
@@ -490,7 +493,11 @@ def test_digits(kernel_info=('rbf', 10)):
     m, n = dataset.shape
     for i in range(m):
         kernelEval = kernelTrans(support_vectors, dataset[i, :], kernel_info)
-        predict = kernelEval.T * numpy.multiply(support_vectors_label, alphas[support_vectors_index]) + b
+        predict = (
+            kernelEval.T
+            * numpy.multiply(support_vectors_label, alphas[support_vectors_index])
+            + b
+        )
         if numpy.sign(predict) != numpy.sign(labels[i]):
             errorCount += 1
     logging.info('测试集上错误率: {:.2%}'.format(1.0 * errorCount / m))
