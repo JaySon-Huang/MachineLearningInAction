@@ -66,8 +66,8 @@ machinelearninginaction/
 
 ch02 - kNN/testDigits/
 ch02 - kNN/trainingDigits/
-
-ch06 - svm/digits/
+ch04 - NaiveBayes/email
+ch06 - svm/digits
 
 # test sets
 *.txt

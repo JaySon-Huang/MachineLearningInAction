@@ -26,6 +26,7 @@ logging.basicConfig(
     format='[%(levelname)s %(module)s line:%(lineno)d] %(message)s',
 )
 
+
 def getFakeDataset():
     posts = [
         ['my', 'dog', 'has', 'flea', 'problems', 'help', 'please'],

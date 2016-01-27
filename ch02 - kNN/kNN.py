@@ -223,7 +223,7 @@ def TranslateImg2Vector(filename):
         for lineno, line in enumerate(infile):
             for rowno in range(32):
                 vector[0, 32*lineno+rowno] = int(line[rowno])
-    return vector
+        return vector
 
 
 def GetDigitsDatasetFromDir(dirname):
