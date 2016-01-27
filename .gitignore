@@ -67,5 +67,7 @@ machinelearninginaction/
 ch02 - kNN/testDigits/
 ch02 - kNN/trainingDigits/
 
+ch06 - svm/digits/
+
 # test sets
 *.txt
