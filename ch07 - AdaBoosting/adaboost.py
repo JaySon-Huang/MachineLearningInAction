@@ -138,6 +138,7 @@ class AdaBoostDicisionStump(object):
         m, _n = dataset.shape
         aggregated_estimate = numpy.mat(numpy.zeros((m, 1)))
         for classifier in self.classifiers:
+            logging.info('Applying stumb: {}'.format(classifier))
             estimate = stump.predict(
                 classifier['dimension'],
                 classifier['threshold'],
@@ -154,11 +155,11 @@ def main():
     # D = numpy.mat(numpy.ones((5, 1)) / 5)
     # build_stump(dataset, labels, D)
     model = AdaBoostDicisionStump(dataset, labels)
-    logging.info(pprint.pformat(model.classifiers))
-    logging.info(zip(
+    logging.info('Classifiers: {}'.format(pprint.pformat(model.classifiers)))
+    logging.info('结果对比 (预测/真实):\n{}'.format(zip(
         model.predict(dataset).A1.tolist(),
         labels
-    ))
+    )))
 
 if __name__ == '__main__':
     main()
