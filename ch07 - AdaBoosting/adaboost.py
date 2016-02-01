@@ -35,11 +35,11 @@ def load_fake_dataset():
 def load_dataset_from_file(filename):
     dataset = []
     labels = []
-    num_features = -1
+    num_features = None
     with open(filename) as infile:
         for line in infile:
             line = line.strip().split('\t')
-            if num_features == -1:
+            if num_features is None:
                 num_features = len(line)
             dataset.append(list(map(float, line[:-1])))
             labels.append(float(line[-1]))
@@ -149,6 +149,52 @@ class AdaBoostDicisionStump(object):
         return numpy.sign(aggregated_estimate)
 
 
+def plotROCCurve(predStrengths, labels):
+    """
+    ROC曲线(Receiver Operating Characteristic curve)
+    ROC曲线给出当阈值变化时假阳率和真阳率的变化情况
+    """
+    import matplotlib.pyplot as plt
+    cursor = (1.0, 1.0)  # 绘制光标的位置
+    ySum = 0.0  # variable to calculate AUC
+    numPositiveClass = sum(numpy.array(labels) == 1.0)  # 正例的数目
+    step = {
+        'x': 1.0 / numPositiveClass,
+        'y': 1.0 / (len(labels) - numPositiveClass),
+    }
+    sortedIndicies = predStrengths.A1.argsort()  # get sorted index, it's reverse
+    fig = plt.figure()
+    fig.clf()
+    ax = plt.subplot(111)
+    # loop through all the values, drawing a line segment at each point
+    for index in sortedIndicies:
+        if labels[index] == 1.0:
+            deltaX = 0
+            deltaY = step['x']
+        else:
+            deltaX = step['y']
+            deltaY = 0
+            ySum += cursor[1]
+        # draw line from cursor to (cursor[0]-deltaX, cursor[1]-deltaY)
+        logging.debug('Drawing line from {} -> {}'.format(
+            cursor, (cursor[0]-deltaX, cursor[1]-deltaY)
+        ))
+        ax.plot(
+            [cursor[0], cursor[0]-deltaX],
+            [cursor[1], cursor[1]-deltaY],
+            c='b'
+        )
+        cursor = (cursor[0] - deltaX, cursor[1] - deltaY)
+    ax.plot([0, 1], [0, 1], 'b--')
+
+    plt.xlabel('False positive rate')
+    plt.ylabel('True positive rate')
+    plt.title('ROC curve for AdaBoost horse colic detection system')
+    ax.axis([0, 1, 0, 1])
+    plt.show()
+    logging.info('曲线下面积AUC(Area Under the Curve): {}'.format(ySum * step['y']))
+
+
 def main():
     import pprint
     dataset, labels = load_fake_dataset()
@@ -161,49 +207,13 @@ def main():
         labels
     )))
 
+    plotROCCurve(model.aggregated_predict, labels)
+
+    dataset, labels = load_dataset_from_file('horseColicTraining2.txt')
+    model = AdaBoostDicisionStump(dataset, labels)
+    plotROCCurve(model.aggregated_predict, labels)
+
+
 if __name__ == '__main__':
     main()
 
-
-def adaClassify(dataset, classifiers):
-    stump = DicisionStump(dataset)
-    dataset = numpy.mat(dataset)  # do stuff similar to last aggClassEst in adaBoostTrainDS
-    m, _n = dataset.shape
-    aggClassEst = numpy.mat(numpy.zeros((m, 1)))
-    for classifier in classifiers:
-        classEst = stump.predict(
-            classifier['dimension'],
-            classifier['threshold'],
-            classifier['inequal']
-        )  # call stump classify
-        aggClassEst += classifiers['alpha'] * classEst
-        print aggClassEst
-    return numpy.sign(aggClassEst)
-
-
-def plotROC(predStrengths, classLabels):
-    import matplotlib.pyplot as plt
-    cur = (1.0,1.0) #cursor
-    ySum = 0.0 #variable to calculate AUC
-    numPosClas = sum(array(classLabels)==1.0)
-    yStep = 1/float(numPosClas); xStep = 1/float(len(classLabels)-numPosClas)
-    sortedIndicies = predStrengths.argsort()#get sorted index, it's reverse
-    fig = plt.figure()
-    fig.clf()
-    ax = plt.subplot(111)
-    #loop through all the values, drawing a line segment at each point
-    for index in sortedIndicies.tolist()[0]:
-        if classLabels[index] == 1.0:
-            delX = 0; delY = yStep;
-        else:
-            delX = xStep; delY = 0;
-            ySum += cur[1]
-        #draw line from cur to (cur[0]-delX,cur[1]-delY)
-        ax.plot([cur[0],cur[0]-delX],[cur[1],cur[1]-delY], c='b')
-        cur = (cur[0]-delX,cur[1]-delY)
-    ax.plot([0,1],[0,1],'b--')
-    plt.xlabel('False positive rate'); plt.ylabel('True positive rate')
-    plt.title('ROC curve for AdaBoost horse colic detection system')
-    ax.axis([0,1,0,1])
-    plt.show()
-    print "the Area Under the Curve is: ",ySum*xStep
