@@ -14,3 +14,20 @@ If you want to run these on some other version of Python say--3.0 or IronPython,
 
 ### 关于此repo
 此repo为个人对官方源码的改写以及笔记
+
+## 章节说明
+### 第一部分 -- 分类
+* 第2章 - k-近邻算法
+* 第3章 - 决策树
+* 第4章 - 朴素贝叶斯分类器
+* 第5章 - Logistic回归
+* 第6章 - AdaBoost元算法
+
+### 第二部分 -- 回归方法
+* 第8章 - 线性回归/局部加权线性回归, 收缩方法
+* 第9章 - 树回归
+
+### 第三部分 -- 无监督学习
+* 第10章 - 无监督学习中聚类方法
+* 第11章 - Apriori算法进行关联分析
+* 第12章 - FP-growth算法进行关联分析
