@@ -1,112 +1,173 @@
-'''
-Created on Jan 8, 2011
+#!/usr/bin/env python
+# encoding=utf-8
 
-@author: Peter
-'''
-from numpy import *
+import logging
 
-def loadDataSet(fileName):      #general function to parse tab -delimited floats
-    numFeat = len(open(fileName).readline().split('\t')) - 1 #get number of fields 
-    dataMat = []; labelMat = []
-    fr = open(fileName)
-    for line in fr.readlines():
-        lineArr =[]
-        curLine = line.strip().split('\t')
-        for i in range(numFeat):
-            lineArr.append(float(curLine[i]))
-        dataMat.append(lineArr)
-        labelMat.append(float(curLine[-1]))
-    return dataMat,labelMat
+import numpy
 
-def standRegres(xArr,yArr):
-    xMat = mat(xArr); yMat = mat(yArr).T
-    xTx = xMat.T*xMat
-    if linalg.det(xTx) == 0.0:
-        print "This matrix is singular, cannot do inverse"
+logging.basicConfig(
+    level=logging.DEBUG,
+    # level=logging.INFO,
+    format='[%(levelname)s %(module)s line:%(lineno)d] %(message)s',
+)
+TRACE = logging.DEBUG - 1
+
+
+def load_dataset_from_file(filename):
+    dataset = []
+    labels = []
+    num_features = None
+    with open(filename) as infile:
+        for line in infile:
+            line = line.strip().split('\t')
+            if num_features is None:
+                num_features = len(line)
+            dataset.append(list(map(float, line[:-1])))
+            labels.append(float(line[-1]))
+        return dataset, labels
+
+
+def standarRegress(xArray, yArray):
+    """使用普通最小二乘法求回归系数"""
+    xMatrix = numpy.mat(xArray)
+    yMatrix = numpy.mat(yArray).T
+    xTx = xMatrix.T * xMatrix
+    if numpy.linalg.det(xTx) == 0.0:
+        logging.error('奇异矩阵无法求逆')
         return
-    ws = xTx.I * (xMat.T*yMat)
-    return ws
+    w = xTx.I * (xMatrix.T * yMatrix)
+    # 或下面这个
+    # w = numpy.linalg.solve(xTx, xMatrix.T * yMatrix)
+    return w.A1
 
-def lwlr(testPoint,xArr,yArr,k=1.0):
-    xMat = mat(xArr); yMat = mat(yArr).T
-    m = shape(xMat)[0]
-    weights = mat(eye((m)))
-    for j in range(m):                      #next 2 lines create weights matrix
-        diffMat = testPoint - xMat[j,:]     #
-        weights[j,j] = exp(diffMat*diffMat.T/(-2.0*k**2))
-    xTx = xMat.T * (weights * xMat)
-    if linalg.det(xTx) == 0.0:
-        print "This matrix is singular, cannot do inverse"
+
+def lwlrRegress(testPoint, xArray, yArray, k=1.0):
+    """局部加权线性回归(LWLR - Locally Weighted Linear Regression)
+    给待预测点附近的每个点赋予一定的权重.
+    LWLR使用"核"来对附近的点赋予更高的权重, 最常用的是高斯核.
+    ===
+
+    """
+    xMatrix = numpy.mat(xArray)
+    yMatrix = numpy.mat(yArray).T
+    m, _n = xMatrix.shape
+    # 利用高斯核初始化权重矩阵
+    weights = numpy.mat(numpy.eye(m))
+    for j in range(m):
+        diffMat = testPoint - xMatrix[j, :]
+        weights[j, j] = numpy.exp(diffMat * diffMat.T / (-2.0 * k**2))
+    xTx = xMatrix.T * (weights * xMatrix)
+    if numpy.linalg.det(xTx) == 0.0:
+        logging.error('奇异矩阵无法求逆')
         return
-    ws = xTx.I * (xMat.T * (weights * yMat))
+    ws = xTx.I * (xMatrix.T * (weights * yMatrix))
     return testPoint * ws
 
-def lwlrTest(testArr,xArr,yArr,k=1.0):  #loops over all the data points and applies lwlr to each one
-    m = shape(testArr)[0]
-    yHat = zeros(m)
+
+def lwlrTest(testArray, xArray, yArray, k=1.0):
+    """
+    对于所有的测试点, 使用LWLR局部加权线性回归来计算预测值
+    """
+    m, _n = numpy.array(testArray).shape
+    yHat = numpy.zeros(m)
     for i in range(m):
-        yHat[i] = lwlr(testArr[i],xArr,yArr,k)
+        yHat[i] = lwlrRegress(testArray[i], xArray, yArray, k)
     return yHat
 
-def lwlrTestPlot(xArr,yArr,k=1.0):  #same thing as lwlrTest except it sorts X first
-    yHat = zeros(shape(yArr))       #easier for plotting
-    xCopy = mat(xArr)
-    xCopy.sort(0)
-    for i in range(shape(xArr)[0]):
-        yHat[i] = lwlr(xCopy[i],xArr,yArr,k)
-    return yHat,xCopy
 
-def rssError(yArr,yHatArr): #yArr and yHatArr both need to be arrays
-    return ((yArr-yHatArr)**2).sum()
+def main():
+    Xs, Ys = load_dataset_from_file('ex0.txt')
+    logging.info('原始数据\n{0}'.format([(x, y) for x, y in zip(Xs, Ys)]))
 
-def ridgeRegres(xMat,yMat,lam=0.2):
-    xTx = xMat.T*xMat
-    denom = xTx + eye(shape(xMat)[1])*lam
-    if linalg.det(denom) == 0.0:
+    w = standarRegress(Xs, Ys)
+    logging.info('最小二乘法回归系数: {0}'.format(w))
+    logging.info('预测序列\n{0}'.format([
+        (x, y) for x, y in map(
+            lambda x: (x, float(numpy.mat(x) * numpy.mat(w).T)),
+            Xs
+        )
+    ]))
+
+    # k = 0.003
+    # k = 0.01
+    k = 0.1
+    yHat = lwlrTest(Xs, Xs, Ys, k=k)
+    logging.info('LWLR预测序列, 系数 k={0}\n{1}'.format(k, [
+        (x, y) for x, y in zip(Xs, yHat)
+    ]))
+
+    # 绘制图看拟合效果
+    xMatrix = numpy.mat(Xs)
+    sorted_index = xMatrix[:, 1].argsort(axis=0)
+    xSort = xMatrix[sorted_index][:, 0, :]
+    import matplotlib.pyplot as plt
+    figure = plt.figure()
+    ax = figure.add_subplot(111)
+    ax.plot(xSort[:, 1], yHat[sorted_index])  # 拟合曲线
+    ax.scatter(
+        xMatrix[:, 1].A1, numpy.mat(Ys).T.A1,
+        s=2, c='red'
+    )  # 原始数据
+    plt.show()
+
+if __name__ == '__main__':
+    main()
+
+
+def rssError(yArray, yHatArr):
+    """计算预测误差"""
+    yArray = numpy.array(yArray)
+    yHatArr = numpy.array(yHatArr)
+    return ((yArray - yHatArr)**2).sum()
+
+def ridgeRegres(xMatrix,yMatrix,lam=0.2):
+    xTx = xMatrix.T*xMatrix
+    denom = xTx + numpy.eye(numpy.shape(xMatrix)[1])*lam
+    if numpy.linalg.det(denom) == 0.0:
         print "This matrix is singular, cannot do inverse"
         return
-    ws = denom.I * (xMat.T*yMat)
+    ws = denom.I * (xMatrix.T*yMatrix)
     return ws
     
-def ridgeTest(xArr,yArr):
-    xMat = mat(xArr); yMat=mat(yArr).T
-    yMean = mean(yMat,0)
-    yMat = yMat - yMean     #to eliminate X0 take mean off of Y
+def ridgeTest(xArray,yArray):
+    xMatrix = numpy.mat(xArray); yMatrix=numpy.mat(yArray).T
+    yMean = numpy.mean(yMatrix,0)
+    yMatrix = yMatrix - yMean     #to eliminate X0 take numpy.mean off of Y
     #regularize X's
-    xMeans = mean(xMat,0)   #calc mean then subtract it off
-    xVar = var(xMat,0)      #calc variance of Xi then divide by it
-    xMat = (xMat - xMeans)/xVar
+    xMeans = numpy.mean(xMatrix,0)   #calc numpy.mean then subtract it off
+    xVar = numpy.var(xMatrix,0)      #calc variance of Xi then divide by it
+    xMatrix = (xMatrix - xMeans)/xVar
     numTestPts = 30
-    wMat = zeros((numTestPts,shape(xMat)[1]))
+    wMat = numpy.zeros((numTestPts,numpy.shape(xMatrix)[1]))
     for i in range(numTestPts):
-        ws = ridgeRegres(xMat,yMat,exp(i-10))
+        ws = ridgeRegres(xMatrix,yMatrix,numpy.exp(i-10))
         wMat[i,:]=ws.T
     return wMat
 
-def regularize(xMat):#regularize by columns
-    inMat = xMat.copy()
-    inMeans = mean(inMat,0)   #calc mean then subtract it off
-    inVar = var(inMat,0)      #calc variance of Xi then divide by it
+def regularize(xMatrix):#regularize by columns
+    inMat = xMatrix.copy()
+    inMeans = numpy.mean(inMat,0)   #calc numpy.mean then subtract it off
+    inVar = numpy.var(inMat,0)      #calc variance of Xi then divide by it
     inMat = (inMat - inMeans)/inVar
     return inMat
 
-def stageWise(xArr,yArr,eps=0.01,numIt=100):
-    xMat = mat(xArr); yMat=mat(yArr).T
-    yMean = mean(yMat,0)
-    yMat = yMat - yMean     #can also regularize ys but will get smaller coef
-    xMat = regularize(xMat)
-    m,n=shape(xMat)
-    #returnMat = zeros((numIt,n)) #testing code remove
-    ws = zeros((n,1)); wsTest = ws.copy(); wsMax = ws.copy()
+def stageWise(xArray,yArray,eps=0.01,numIt=100):
+    xMatrix = numpy.mat(xArray); yMatrix=numpy.mat(yArray).T
+    yMean = numpy.mean(yMatrix,0)
+    yMatrix = yMatrix - yMean     #can also regularize ys but will get smaller coef
+    xMatrix = regularize(xMatrix)
+    m,n=numpy.shape(xMatrix)
+    #returnMat = numpy.zeros((numIt,n)) #testing code remove
+    ws = numpy.zeros((n,1)); wsTest = ws.copy(); wsMax = ws.copy()
     for i in range(numIt):
         print ws.T
-        lowestError = inf; 
+        lowestError = numpy.inf; 
         for j in range(n):
             for sign in [-1,1]:
                 wsTest = ws.copy()
                 wsTest[j] += eps*sign
-                yTest = xMat*wsTest
-                rssE = rssError(yMat.A,yTest.A)
+                yTest = xMatrix*wsTest
+                rssE = rssError(yMatrix.A,yTest.A)
                 if rssE < lowestError:
                     lowestError = rssE
                     wsMax = wsTest
@@ -175,38 +236,38 @@ def setDataCollect(retX, retY):
     searchForSet(retX, retY, 10189, 2008, 5922, 299.99)
     searchForSet(retX, retY, 10196, 2009, 3263, 249.99)
     
-def crossValidation(xArr,yArr,numVal=10):
-    m = len(yArr)                           
+def crossValidation(xArray,yArray,numVal=10):
+    m = len(yArray)                           
     indexList = range(m)
-    errorMat = zeros((numVal,30))#create error mat 30columns numVal rows
+    errorMat = numpy.zeros((numVal,30))#create error numpy.mat 30columns numVal rows
     for i in range(numVal):
         trainX=[]; trainY=[]
         testX = []; testY = []
-        random.shuffle(indexList)
+        numpy.random.shuffle(indexList)
         for j in range(m):#create training set based on first 90% of values in indexList
             if j < m*0.9: 
-                trainX.append(xArr[indexList[j]])
-                trainY.append(yArr[indexList[j]])
+                trainX.append(xArray[indexList[j]])
+                trainY.append(yArray[indexList[j]])
             else:
-                testX.append(xArr[indexList[j]])
-                testY.append(yArr[indexList[j]])
+                testX.append(xArray[indexList[j]])
+                testY.append(yArray[indexList[j]])
         wMat = ridgeTest(trainX,trainY)    #get 30 weight vectors from ridge
         for k in range(30):#loop over all of the ridge estimates
-            matTestX = mat(testX); matTrainX=mat(trainX)
-            meanTrain = mean(matTrainX,0)
-            varTrain = var(matTrainX,0)
+            matTestX = numpy.mat(testX); matTrainX=numpy.mat(trainX)
+            meanTrain = numpy.mean(matTrainX,0)
+            varTrain = numpy.var(matTrainX,0)
             matTestX = (matTestX-meanTrain)/varTrain #regularize test with training params
-            yEst = matTestX * mat(wMat[k,:]).T + mean(trainY)#test ridge results and store
-            errorMat[i,k]=rssError(yEst.T.A,array(testY))
+            yEst = matTestX * numpy.mat(wMat[k,:]).T + numpy.mean(trainY)#test ridge results and store
+            errorMat[i,k]=rssError(yEst.T.A,numpy.array(testY))
             #print errorMat[i,k]
-    meanErrors = mean(errorMat,0)#calc avg performance of the different ridge weight vectors
+    meanErrors = numpy.mean(errorMat,0)#calc avg performance of the different ridge weight vectors
     minMean = float(min(meanErrors))
-    bestWeights = wMat[nonzero(meanErrors==minMean)]
+    bestWeights = wMat[numpy.nonzero(meanErrors==minMean)]
     #can unregularize to get model
-    #when we regularized we wrote Xreg = (x-meanX)/var(x)
-    #we can now write in terms of x not Xreg:  x*w/var(x) - meanX/var(x) +meanY
-    xMat = mat(xArr); yMat=mat(yArr).T
-    meanX = mean(xMat,0); varX = var(xMat,0)
+    #when we regularized we wrote Xreg = (x-meanX)/numpy.var(x)
+    #we can now write in terms of x not Xreg:  x*w/numpy.var(x) - meanX/numpy.var(x) +meanY
+    xMatrix = numpy.mat(xArray); yMatrix=numpy.mat(yArray).T
+    meanX = numpy.mean(xMatrix,0); varX = numpy.var(xMatrix,0)
     unReg = bestWeights/varX
     print "the best model from Ridge Regression is:\n",unReg
-    print "with constant term: ",-1*sum(multiply(meanX,unReg)) + mean(yMat)
+    print "with constant term: ",-1*sum(numpy.multiply(meanX,unReg)) + numpy.mean(yMatrix)
