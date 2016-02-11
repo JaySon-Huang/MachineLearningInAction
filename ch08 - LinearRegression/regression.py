@@ -75,6 +75,46 @@ def lwlrTest(testArray, xArray, yArray, k=1.0):
     return yHat
 
 
+def rssError(yArray, yHatArr):
+    """计算预测误差"""
+    yArray = numpy.array(yArray)
+    yHatArr = numpy.array(yHatArr)
+    return ((yArray - yHatArr)**2).sum()
+
+"""缩减方法 -- 岭回归, 前向足部回归, lasso法"""
+
+
+def ridgeRegress(xMatrix, yMatrix, lam=0.2):
+    xTx = xMatrix.T * xMatrix
+    _m, n = numpy.shape(xMatrix)
+    denom = xTx + (numpy.eye(n) * lam)
+    if numpy.linalg.det(denom) == 0.0:
+        logging.error('奇异矩阵无法求逆')
+        return
+    ws = denom.I * (xMatrix.T * yMatrix)
+    return ws
+
+
+def ridgeTest(xArray, yArray):
+    xMatrix = numpy.mat(xArray)
+    yMatrix = numpy.mat(yArray).T
+    # 标准化Y
+    yMean = numpy.mean(yMatrix, 0)
+    yMatrix = yMatrix - yMean     # to eliminate X0 take numpy.mean off of Y
+    # 标准化X的每一维
+    xMeans = numpy.mean(xMatrix, 0)   # calc numpy.mean then subtract it off
+    xVar = numpy.var(xMatrix, 0)      # calc variance of Xi then divide by it
+    xMatrix = (xMatrix - xMeans) / xVar
+
+    numTestPts = 30
+    _m, n = xMatrix.shape
+    wMatrix = numpy.zeros((numTestPts, n))
+    for i in range(numTestPts):
+        ws = ridgeRegress(xMatrix, yMatrix, numpy.exp(i - 10))
+        wMatrix[i, :] = ws.T
+    return wMatrix
+
+
 def main():
     Xs, Ys = load_dataset_from_file('ex0.txt')
     logging.info('原始数据\n{0}'.format([(x, y) for x, y in zip(Xs, Ys)]))
@@ -89,13 +129,14 @@ def main():
     ]))
 
     # k = 0.003
-    # k = 0.01
-    k = 0.1
+    k = 0.01
+    # k = 0.1
     yHat = lwlrTest(Xs, Xs, Ys, k=k)
     logging.info('LWLR预测序列, 系数 k={0}\n{1}'.format(k, [
         (x, y) for x, y in zip(Xs, yHat)
     ]))
 
+    '''
     # 绘制图看拟合效果
     xMatrix = numpy.mat(Xs)
     sorted_index = xMatrix[:, 1].argsort(axis=0)
@@ -109,40 +150,15 @@ def main():
         s=2, c='red'
     )  # 原始数据
     plt.show()
+    '''
+
+    abaloneXs, abalineYs = load_dataset_from_file('abalone.txt')
+    w = ridgeTest(abaloneXs, abalineYs)
+
 
 if __name__ == '__main__':
     main()
 
-
-def rssError(yArray, yHatArr):
-    """计算预测误差"""
-    yArray = numpy.array(yArray)
-    yHatArr = numpy.array(yHatArr)
-    return ((yArray - yHatArr)**2).sum()
-
-def ridgeRegres(xMatrix,yMatrix,lam=0.2):
-    xTx = xMatrix.T*xMatrix
-    denom = xTx + numpy.eye(numpy.shape(xMatrix)[1])*lam
-    if numpy.linalg.det(denom) == 0.0:
-        print "This matrix is singular, cannot do inverse"
-        return
-    ws = denom.I * (xMatrix.T*yMatrix)
-    return ws
-    
-def ridgeTest(xArray,yArray):
-    xMatrix = numpy.mat(xArray); yMatrix=numpy.mat(yArray).T
-    yMean = numpy.mean(yMatrix,0)
-    yMatrix = yMatrix - yMean     #to eliminate X0 take numpy.mean off of Y
-    #regularize X's
-    xMeans = numpy.mean(xMatrix,0)   #calc numpy.mean then subtract it off
-    xVar = numpy.var(xMatrix,0)      #calc variance of Xi then divide by it
-    xMatrix = (xMatrix - xMeans)/xVar
-    numTestPts = 30
-    wMat = numpy.zeros((numTestPts,numpy.shape(xMatrix)[1]))
-    for i in range(numTestPts):
-        ws = ridgeRegres(xMatrix,yMatrix,numpy.exp(i-10))
-        wMat[i,:]=ws.T
-    return wMat
 
 def regularize(xMatrix):#regularize by columns
     inMat = xMatrix.copy()
