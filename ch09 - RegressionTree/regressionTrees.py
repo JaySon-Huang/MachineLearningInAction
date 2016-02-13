@@ -150,6 +150,11 @@ class Dataset(object):
 
 
 class RegressionTree(object):
+    """回归树 -- 普通回归树/模型回归树
+    普通回归树 - 把相近的一群点作为一个模拟点
+    模型回归树 - 把'模式类似'的一群点化为一个线性函数的回归系数
+    """
+
     def __init__(self, dataset, tree_type=TYPE_VALUE, total_s=1.0, total_n=4):
         self.tree_type = tree_type
         self.dataset = Dataset(dataset)
@@ -339,37 +344,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-def regTreeEval(model, inDat):
-    return float(model)
-
-
-def modelTreeEval(model, inDat):
-    n = numpy.shape(inDat)[1]
-    X = numpy.mat(numpy.ones((1, n + 1)))
-    X[:, 1:n + 1] = inDat
-    return float(X * model)
-
-
-def treeForeCast(tree, inData, modelEval=regTreeEval):
-    if not isTree(tree): return modelEval(tree, inData)
-    if inData[tree['spInd']] > tree['spVal']:
-        if isTree(tree['left']):
-            return treeForeCast(tree['left'], inData, modelEval)
-        else:
-            return modelEval(tree['left'], inData)
-    else:
-        if isTree(tree['right']):
-            return treeForeCast(tree['right'], inData, modelEval)
-        else:
-            return modelEval(tree['right'], inData)
-
-
-def createForeCast(tree, testData, modelEval=regTreeEval):
-    m = len(testData)
-    yHat = numpy.mat(numpy.zeros((m, 1)))
-    for i in range(m):
-        yHat[i, 0] = treeForeCast(tree, numpy.mat(testData[i]), modelEval)
-    return yHat
