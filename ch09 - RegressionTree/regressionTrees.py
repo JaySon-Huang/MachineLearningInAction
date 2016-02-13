@@ -8,12 +8,12 @@ import logging
 
 import numpy
 
-logging.basicConfig(
-        level=logging.DEBUG,
-        # level=logging.INFO,
-        format='[%(levelname)s %(module)s line:%(lineno)d] %(message)s',
-)
 TRACE = logging.DEBUG - 1
+logging.basicConfig(
+    level=logging.DEBUG,
+    # level=TRACE,
+    format='[%(levelname)s %(module)s line:%(lineno)d] %(message)s',
+)
 
 
 def load_dataset_from_file(filename):
@@ -151,6 +151,7 @@ class Dataset(object):
 
 class RegressionTree(object):
     def __init__(self, dataset, tree_type=TYPE_VALUE, total_s=1.0, total_n=4):
+        self.tree_type = tree_type
         self.dataset = Dataset(dataset)
         self.tree = self.__build_tree(self.dataset, tree_type, total_s, total_n)
 
@@ -182,6 +183,7 @@ class RegressionTree(object):
         return (tree['left'] + tree['right']) / 2.0
 
     def prune(self, test_dataset):
+        assert self.tree_type == TYPE_VALUE
         return self.__do_prune(copy.deepcopy(self.tree), Dataset(test_dataset))
 
     @classmethod
@@ -220,17 +222,55 @@ class RegressionTree(object):
             else:
                 return tree
 
+    @staticmethod
+    def eval_value(model, in_dataset):
+        return float(model)
+
+    @staticmethod
+    def eval_model(model, in_dataset):
+        m, n = in_dataset.shape
+        X = numpy.mat(numpy.ones((1, n + 1)))
+        X[0, 1:n+1] = in_dataset.rawDataset
+        return float(X * numpy.mat(model).T)
+
+    def predict(self, test_dataset):
+        m, n = test_dataset.shape
+        yHat = numpy.mat(numpy.zeros((m, 1)))
+        for i in range(m):
+            eval_func = None
+            if self.tree_type == TYPE_VALUE:
+                eval_func = self.eval_value
+            elif self.tree_type == TYPE_MODEL:
+                eval_func = self.eval_model
+            yHat[i, 0] = self.__do_predict(
+                self.tree,
+                Dataset(test_dataset[i]),
+                eval_func
+            )
+            logging.log(TRACE, '{} -> {}'.format(test_dataset[i, 0], yHat[i, 0]))
+        return yHat
+
+    def __do_predict(self, tree, test_dataset, eval_func):
+        if not self.is_tree(tree):
+            return eval_func(tree, test_dataset)
+
+        if test_dataset.rawDataset[tree['index']] > tree['value']:
+            logging.log(TRACE, '{0} > {1} : go left'.format(
+                test_dataset.rawDataset[tree['index']],
+                tree['value']
+            ))
+            return self.__do_predict(tree['left'], test_dataset, eval_func)
+        else:
+            logging.log(TRACE, '{0} <= {1} : go right'.format(
+                test_dataset.rawDataset[tree['index']],
+                tree['value']
+            ))
+            return self.__do_predict(tree['right'], test_dataset, eval_func)
+
 
 def main():
-    '''
-    m = numpy.mat(numpy.eye(4))
-    print(binSplitDataset(m, 1, 0.5))
-    m = Dataset(m)
-    m0, m1 = m.split(1, 0.5)
-    print((m0.rawDataset, m1.rawDataset))
-    '''
     import pprint
-
+    """
     filename = 'ex00.txt'
     dataset = load_dataset_from_file(filename)
     tree = RegressionTree(dataset)
@@ -269,6 +309,33 @@ def main():
         filename,
         pprint.pformat(tree.tree)
     ))
+    """
+    # 回归树/模型树拟合效果对比
+    train_filename = 'bikeSpeedVsIq_train.txt'
+    train_dataset = load_dataset_from_file(train_filename)
+    test_filename = 'bikeSpeedVsIq_test.txt'
+    test_dataset = numpy.mat(load_dataset_from_file(test_filename))
+
+    regular_regression_tree = RegressionTree(train_dataset, TYPE_VALUE, 1, 20)
+    logging.info('`{0}` -> 回归树:\n{1}'.format(
+        train_filename,
+        pprint.pformat(regular_regression_tree.tree)
+    ))
+    yHat = regular_regression_tree.predict(test_dataset[:, 0])
+    logging.info('{0}'.format(
+        numpy.corrcoef(yHat, test_dataset[:, 1], rowvar=0)[0, 1]
+    ))
+
+    model_regression_tree = RegressionTree(train_dataset, TYPE_MODEL, 1, 20)
+    logging.info('`{0}` -> 模型回归树:\n{1}'.format(
+        train_filename,
+        pprint.pformat(model_regression_tree.tree)
+    ))
+    yHat = model_regression_tree.predict(test_dataset[:, 0])
+    logging.info('{0}'.format(
+        numpy.corrcoef(yHat, test_dataset[:, 1], rowvar=0)[0, 1]
+    ))
+
 
 if __name__ == '__main__':
     main()
