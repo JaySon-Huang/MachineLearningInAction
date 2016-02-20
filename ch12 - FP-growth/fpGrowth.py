@@ -1,37 +1,41 @@
-'''
-Created on Jun 14, 2011
-FP-Growth FP means frequent pattern
-the FP-Growth algorithm needs: 
-1. FP-tree (class treeNode)
-2. header table (use dict)
+#!/usr/bin/env python
+# encoding=utf-8
 
-This finds frequent itemsets similar to apriori but does not 
-find association rules.  
+from __future__ import print_function
 
-@author: Peter
-'''
-class treeNode:
-    def __init__(self, nameValue, numOccur, parentNode):
-        self.name = nameValue
-        self.count = numOccur
+import logging
+
+TRACE = logging.DEBUG - 1
+logging.basicConfig(
+    level=logging.DEBUG,
+    # level=TRACE,
+    format='[%(levelname)s %(module)s line:%(lineno)d] %(message)s',
+)
+
+
+class Node(object):
+    def __init__(self, name, num_occur, parent):
+        self.parent = parent
+        self.name = name
+        self.count = num_occur
         self.nodeLink = None
-        self.parent = parentNode      #needs to be updated
-        self.children = {} 
+        self.children = {}
     
-    def inc(self, numOccur):
-        self.count += numOccur
+    def inc(self, num_occur):
+        self.count += num_occur
         
-    def disp(self, ind=1):
-        print '  '*ind, self.name, ' ', self.count
+    def display(self, depth=1):
+        print('  ' * depth, self.name, ' ', self.count)
         for child in self.children.values():
-            child.disp(ind+1)
+            child.display(depth + 1)
 
-def createTree(dataSet, minSup=1): #create FP-tree from dataset but don't mine
+
+def createTree(dataset, minSup=1): #create FP-tree from dataset but don't mine
     headerTable = {}
     #go over dataSet twice
-    for trans in dataSet:#first pass counts frequency of occurance
+    for trans in dataset:#first pass counts frequency of occurance
         for item in trans:
-            headerTable[item] = headerTable.get(item, 0) + dataSet[trans]
+            headerTable[item] = headerTable.get(item, 0) + dataset[trans]
     for k in headerTable.keys():  #remove items not meeting minSup
         if headerTable[k] < minSup: 
             del(headerTable[k])
@@ -41,8 +45,8 @@ def createTree(dataSet, minSup=1): #create FP-tree from dataset but don't mine
     for k in headerTable:
         headerTable[k] = [headerTable[k], None] #reformat headerTable to use Node link 
     #print 'headerTable: ',headerTable
-    retTree = treeNode('Null Set', 1, None) #create tree
-    for tranSet, count in dataSet.items():  #go through dataset 2nd time
+    retTree = Node('Null Set', 1, None) #create tree
+    for tranSet, count in dataset.items():  #go through dataset 2nd time
         localD = {}
         for item in tranSet:  #put transaction items in order
             if item in freqItemSet:
@@ -56,7 +60,7 @@ def updateTree(items, inTree, headerTable, count):
     if items[0] in inTree.children:#check if orderedItems[0] in retTree.children
         inTree.children[items[0]].inc(count) #incrament count
     else:   #add items[0] to inTree.children
-        inTree.children[items[0]] = treeNode(items[0], count, inTree)
+        inTree.children[items[0]] = Node(items[0], count, inTree)
         if headerTable[items[0]][1] == None: #update header table 
             headerTable[items[0]][1] = inTree.children[items[0]]
         else:
@@ -116,47 +120,47 @@ def createInitSet(dataSet):
         retDict[frozenset(trans)] = 1
     return retDict
 
-import twitter
-from time import sleep
-import re
-
-def textParse(bigString):
-    urlsRemoved = re.sub('(http:[/][/]|www.)([a-z]|[A-Z]|[0-9]|[/.]|[~])*', '', bigString)    
-    listOfTokens = re.split(r'\W*', urlsRemoved)
-    return [tok.lower() for tok in listOfTokens if len(tok) > 2]
-
-def getLotsOfTweets(searchStr):
-    CONSUMER_KEY = ''
-    CONSUMER_SECRET = ''
-    ACCESS_TOKEN_KEY = ''
-    ACCESS_TOKEN_SECRET = ''
-    api = twitter.Api(consumer_key=CONSUMER_KEY, consumer_secret=CONSUMER_SECRET,
-                      access_token_key=ACCESS_TOKEN_KEY, 
-                      access_token_secret=ACCESS_TOKEN_SECRET)
-    #you can get 1500 results 15 pages * 100 per page
-    resultsPages = []
-    for i in range(1,15):
-        print "fetching page %d" % i
-        searchResults = api.GetSearch(searchStr, per_page=100, page=i)
-        resultsPages.append(searchResults)
-        sleep(6)
-    return resultsPages
-
-def mineTweets(tweetArr, minSup=5):
-    parsedList = []
-    for i in range(14):
-        for j in range(100):
-            parsedList.append(textParse(tweetArr[i][j].text))
-    initSet = createInitSet(parsedList)
-    myFPtree, myHeaderTab = createTree(initSet, minSup)
-    myFreqList = []
-    mineTree(myFPtree, myHeaderTab, minSup, set([]), myFreqList)
-    return myFreqList
-
-#minSup = 3
-#simpDat = loadSimpDat()
-#initSet = createInitSet(simpDat)
-#myFPtree, myHeaderTab = createTree(initSet, minSup)
-#myFPtree.disp()
-#myFreqList = []
-#mineTree(myFPtree, myHeaderTab, minSup, set([]), myFreqList)
+# import twitter
+# from time import sleep
+# import re
+#
+# def textParse(bigString):
+#     urlsRemoved = re.sub('(http:[/][/]|www.)([a-z]|[A-Z]|[0-9]|[/.]|[~])*', '', bigString)
+#     listOfTokens = re.split(r'\W*', urlsRemoved)
+#     return [tok.lower() for tok in listOfTokens if len(tok) > 2]
+#
+# def getLotsOfTweets(searchStr):
+#     CONSUMER_KEY = ''
+#     CONSUMER_SECRET = ''
+#     ACCESS_TOKEN_KEY = ''
+#     ACCESS_TOKEN_SECRET = ''
+#     api = twitter.Api(consumer_key=CONSUMER_KEY, consumer_secret=CONSUMER_SECRET,
+#                       access_token_key=ACCESS_TOKEN_KEY,
+#                       access_token_secret=ACCESS_TOKEN_SECRET)
+#     #you can get 1500 results 15 pages * 100 per page
+#     resultsPages = []
+#     for i in range(1,15):
+#         print("fetching page %d" % i)
+#         searchResults = api.GetSearch(searchStr, per_page=100, page=i)
+#         resultsPages.append(searchResults)
+#         sleep(6)
+#     return resultsPages
+#
+# def mineTweets(tweetArr, minSup=5):
+#     parsedList = []
+#     for i in range(14):
+#         for j in range(100):
+#             parsedList.append(textParse(tweetArr[i][j].text))
+#     initSet = createInitSet(parsedList)
+#     myFPtree, myHeaderTab = createTree(initSet, minSup)
+#     myFreqList = []
+#     mineTree(myFPtree, myHeaderTab, minSup, set([]), myFreqList)
+#     return myFreqList
+#
+# #minSup = 3
+# #simpDat = loadSimpDat()
+# #initSet = createInitSet(simpDat)
+# #myFPtree, myHeaderTab = createTree(initSet, minSup)
+# #myFPtree.disp()
+# #myFreqList = []
+# #mineTree(myFPtree, myHeaderTab, minSup, set([]), myFreqList)
