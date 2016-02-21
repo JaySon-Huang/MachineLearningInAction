@@ -55,109 +55,113 @@ class TableItem(object):
 
 
 class FrequentPatternTree(object):
-    def __init__(self):
-        pass
+    def __init__(self, dataset, min_support_degree=1):
+        self.min_support_degree = min_support_degree
+        self.table = {}
+        # 对每个元素出现次数进行计数
+        for transaction in dataset:
+            for item in transaction:
+                self.table[item] = (
+                    self.table.get(item, 0) + dataset[transaction]
+                )
+        # 删除出现次数少于 min_support_degree 的项
+        self.table = {
+            key: value for (key, value) in self.table.items()
+            if value >= self.min_support_degree
+        }
+        frequent_items = set(self.table.keys())
 
+        # 如果所有项都不频繁, 跳过下面的处理步骤
+        if len(frequent_items) == 0:
+            self.root = None
+            self.table = None
+            return
 
-# create FP-tree from dataset but don't mine
-def createTree(dataset, min_support_degree=1):
-    headerTable = {}
-    # 对每个元素出现次数进行计数
-    for trans in dataset:
-        for item in trans:
-            headerTable[item] = headerTable.get(item, 0) + dataset[trans]
-    # 删除出现次数少于 min_support_degree 的项
-    headerTable = {
-        key: value for (key, value) in headerTable.items()
-        if value >= min_support_degree
-    }
-    frequent_items = set(headerTable.keys())
+        # 扩展 headerTable 以便保存计数值以及指向每种类型第一个元素项的指针
+        self.table = {
+            key: TableItem(value, None) for (key, value) in self.table.items()
+        }
 
-    # 如果所有项都不频繁, 跳过下面的处理步骤
-    if len(frequent_items) == 0:
-        return None, None
+        self.root = Node('Null Set', 1, None)
+        for transaction, count in dataset.items():
+            local_dataset = {}
+            for item in transaction:  # put transaction items in order
+                if item in frequent_items:
+                    local_dataset[item] = self.table[item].count
+            if len(local_dataset) > 0:
+                ordered_items = [v[0] for v in sorted(
+                    local_dataset.items(), key=lambda p: p[1],
+                    reverse=True
+                )]
+                # populate tree with ordered freq itemset
+                self.__update(ordered_items, self.root, count)
 
-    # 扩展 headerTable 以便保存计数值以及指向每种类型第一个元素项的指针
-    headerTable = {
-        key: TableItem(value, None) for (key, value) in headerTable.items()
-    }
+    @property
+    def is_empty(self):
+        return self.root is None
 
-    root = Node('Null Set', 1, None)
-    for transaction, count in dataset.items():
-        local_dataset = {}
-        for item in transaction:  # put transaction items in order
-            if item in frequent_items:
-                local_dataset[item] = headerTable[item].count
-        if len(local_dataset) > 0:
-            ordered_items = [v[0] for v in sorted(
-                local_dataset.items(), key=lambda p: p[1],
-                reverse=True
-            )]
-            # populate tree with ordered freq itemset
-            updateTree(ordered_items, root, headerTable, count)
-    return root, headerTable
-
-
-def updateTree(items, tree, headerTable, count):
-    if items[0] in tree.children:
-        # 如果已经在孩子列表中, 增加出现次数
-        tree.children[items[0]].inc(count)
-    else:
-        # 把结点添加到当前结点的子节点上
-        tree.children[items[0]] = Node(items[0], count, tree)
-        # 更新 headerTable
-        if headerTable[items[0]].head is None:
-            headerTable[items[0]].head = tree.children[items[0]]
+    def __update(self, items, root, count):
+        if items[0] in root.children:
+            # 如果已经在孩子列表中, 增加出现次数
+            root.children[items[0]].inc(count)
         else:
-            temp = headerTable[items[0]].head
-            while temp.nodeLink is not None:
-                temp = temp.nodeLink
-            temp.nodeLink = tree.children[items[0]]
-    # call updateTree() with remaining ordered items
-    if len(items) > 1:
-        updateTree(items[1:], tree.children[items[0]], headerTable, count)
+            # 把结点添加到当前结点的子节点上
+            root.children[items[0]] = Node(items[0], count, root)
+            # 更新 table
+            if self.table[items[0]].head is None:
+                self.table[items[0]].head = root.children[items[0]]
+            else:
+                temp = self.table[items[0]].head
+                while temp.nodeLink is not None:
+                    temp = temp.nodeLink
+                temp.nodeLink = root.children[items[0]]
+        # call update() with remaining ordered items
+        if len(items) > 1:
+            self.__update(items[1:], root.children[items[0]], count)
 
+    @staticmethod
+    def find_prefix_paths(element, node):
+        paths = {}
+        while node is not None:
+            leaf = node
+            prefix = []
+            while leaf.parent is not None:
+                prefix.append(leaf.name)
+                leaf = leaf.parent
+            if len(prefix) > 1:
+                paths[frozenset(prefix[1:])] = node.count
+            node = node.nodeLink
+        return paths
 
-def find_prefix_paths(element, node):
-    paths = {}
-    while node is not None:
-        leaf = node
-        prefix = []
-        while leaf.parent is not None:
-            prefix.append(leaf.name)
-            leaf = leaf.parent
-        if len(prefix) > 1:
-            paths[frozenset(prefix[1:])] = node.count
-        node = node.nodeLink
-    return paths
-
-
-def mineTree(
-        tree, headerTable, min_support_degree,
-        prefix, frequent_items):
-    # (sort header table)
-    items = [pair[0] for pair in sorted(headerTable.items(), key=lambda p: p[1])]
-    for basePat in items:
-        new_frequent_set = prefix | {basePat}
-        # print('finalFrequent Item: ', new_frequent_set)
-        frequent_items.append(new_frequent_set)
-        condition_pattern_bases = find_prefix_paths(
-            basePat, headerTable[basePat].head
-        )
-        # print('condition_pattern_bases :', basePat, condition_pattern_bases)
-        # 2. construct cond FP-tree from cond. pattern base
-        condition_tree, condition_table = createTree(
-            condition_pattern_bases,
-            min_support_degree=min_support_degree
-        )
-        # print('head from conditional tree: ', condition_table)
-        if condition_table is not None:  # 3. mine cond. FP-tree
-            # logging.debug('conditional tree for: {0}'.format(new_frequent_set))
-            # condition_tree.display(1)
-            mineTree(
-                condition_tree, condition_table,
-                min_support_degree, new_frequent_set, frequent_items
+    def mine(self, prefix=None):
+        if prefix is None:
+            prefix = set([])
+        frequent_items = []
+        # (sort header table)
+        items = [
+            pair[0] for pair in
+            sorted(self.table.items(), key=lambda p: p[1])
+        ]
+        for item in items:
+            new_frequent_set = prefix | {item}
+            # print('finalFrequent Item: ', new_frequent_set)
+            frequent_items.append(new_frequent_set)
+            condition_pattern_bases = self.find_prefix_paths(
+                item, self.table[item].head
             )
+            # print('condition_pattern_bases :', item, condition_pattern_bases)
+            # 2. construct cond FP-tree from cond. pattern base
+            condition_tree = FrequentPatternTree(
+                condition_pattern_bases,
+                self.min_support_degree
+            )
+            # print('head from conditional tree: ', condition_table)
+            if not condition_tree.is_empty:  # 3. mine cond. FP-tree
+                # logging.debug('conditional tree for: {0}'.format(new_frequent_set))
+                # condition_tree.display(1)
+                sub_frequent_items = condition_tree.mine(new_frequent_set)
+                frequent_items.extend(sub_frequent_items)
+        return frequent_items
 
 
 def load_fake_dataset():
@@ -180,39 +184,32 @@ def init_dataset(dataset):
 
 
 def main():
-    # import pprint
-    # dataset = load_fake_dataset()
-    # dataset = init_dataset(dataset)
-    # fp_tree, table = createTree(dataset, min_support_degree=3)
+    import pprint
+    dataset = load_fake_dataset()
+    dataset = init_dataset(dataset)
+    fp_tree = FrequentPatternTree(dataset, min_support_degree=3)
     # fp_tree.display()
-    # logging.info(pprint.pformat(table))
-    #
-    # logging.info(find_prefix_paths('x', table['x'].head))
-    # logging.info(find_prefix_paths('z', table['z'].head))
-    # logging.info(find_prefix_paths('r', table['r'].head))
-    #
-    # frequent_items = []
-    # mineTree(
-    #     fp_tree, table,
-    #     min_support_degree=3,
-    #     prefix=set([]), frequent_items=frequent_items
-    # )
-    # # logging.info(pprint.pformat(frequent_items))
-    # print(pprint.pformat(frequent_items))
+    logging.info(pprint.pformat(fp_tree.table))
+
+    logging.info(FrequentPatternTree.find_prefix_paths('x', fp_tree.table['x'].head))
+    logging.info(FrequentPatternTree.find_prefix_paths('z', fp_tree.table['z'].head))
+    logging.info(FrequentPatternTree.find_prefix_paths('r', fp_tree.table['r'].head))
+
+    frequent_items = fp_tree.mine()
+    logging.info(pprint.pformat(frequent_items))
 
     dataset = []
     with open('kosarak.dat', 'r') as infile:
         for line in infile:
             dataset.append(line.split())
-    dataset = init_dataset(dataset)
+    # dataset1 = {frozenset(transaction): 1 for transaction in dataset}
+    dataset2 = init_dataset(dataset)
+    # logging.debug(dataset1)
+    # logging.debug(dataset2)
     min_support_degree = 100000
-    fp_tree, table = createTree(dataset, min_support_degree)
-    frequent_items = []
-    mineTree(
-        fp_tree, table,
-        min_support_degree, set([]), frequent_items
-    )
-    print(frequent_items)
+    fp_tree = FrequentPatternTree(dataset2, min_support_degree)
+    frequent_items = fp_tree.mine()
+    logging.info(pprint.pformat(frequent_items))
 
 
 if __name__ == '__main__':
