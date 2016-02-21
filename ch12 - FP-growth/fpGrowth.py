@@ -176,26 +176,16 @@ def load_fake_dataset():
     return dataset
 
 
-def init_dataset(dataset):
-    result = {}
-    for transaction in dataset:
-        result[frozenset(transaction)] = 1
-    return result
-
-
 def main():
     import pprint
     dataset = load_fake_dataset()
-    dataset1 = {frozenset(transaction): 1 for transaction in dataset}
-    dataset2 = init_dataset(dataset)
-    logging.debug(dataset1)
-    logging.debug(dataset2)
-    fp_tree = FrequentPatternTree(dataset2, min_support_degree=3)
+    dataset = {frozenset(transaction): 1 for transaction in dataset}
+    fp_tree = FrequentPatternTree(dataset, min_support_degree=3)
     logging.info(pprint.pformat(fp_tree.table))
 
-    # logging.info(FrequentPatternTree.find_prefix_paths('x', fp_tree.table['x'].head))
-    # logging.info(FrequentPatternTree.find_prefix_paths('z', fp_tree.table['z'].head))
-    # logging.info(FrequentPatternTree.find_prefix_paths('r', fp_tree.table['r'].head))
+    logging.info(FrequentPatternTree.find_prefix_paths('x', fp_tree.table['x'].head))
+    logging.info(FrequentPatternTree.find_prefix_paths('z', fp_tree.table['z'].head))
+    logging.info(FrequentPatternTree.find_prefix_paths('r', fp_tree.table['r'].head))
 
     frequent_items = fp_tree.mine()
     logging.info(pprint.pformat(frequent_items))
@@ -204,17 +194,10 @@ def main():
     with open('kosarak.dat', 'r') as infile:
         for line in infile:
             dataset.append(line.split())
-    dataset1 = {frozenset(transaction): 1 for transaction in dataset}
-    logging.debug(len(dataset1))
+    dataset = {frozenset(transaction): 1 for transaction in dataset}
+    logging.debug(len(dataset))
     min_support_degree = 100000
-    fp_tree = FrequentPatternTree(dataset1, min_support_degree)
-    frequent_items = fp_tree.mine()
-    logging.info(pprint.pformat(frequent_items))
-
-    dataset2 = init_dataset(dataset)
-    logging.debug(len(dataset2))
-    min_support_degree = 100000
-    fp_tree = FrequentPatternTree(dataset2, min_support_degree)
+    fp_tree = FrequentPatternTree(dataset, min_support_degree)
     frequent_items = fp_tree.mine()
     logging.info(pprint.pformat(frequent_items))
 
@@ -260,10 +243,3 @@ if __name__ == '__main__':
 #     mineTree(myFPtree, myHeaderTab, minSup, set([]), myFreqList)
 #     return myFreqList
 #
-# #minSup = 3
-# #simpDat = loadSimpDat()
-# #initSet = createInitSet(simpDat)
-# #myFPtree, myHeaderTab = createTree(initSet, minSup)
-# #myFPtree.disp()
-# #myFreqList = []
-# #mineTree(myFPtree, myHeaderTab, minSup, set([]), myFreqList)
